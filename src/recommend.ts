@@ -30,20 +30,49 @@ export function scored(rows: Row[]) {
     }));
 }
 
-// TODO(Matthew): implement the rule.
+// The rule. Deliberately small so it can be argued with line by line.
 //
-// Inputs: `scored(rows)` (one entry per call; the cache+sticky strategy has call 1 and 2).
-// Output: which strategy to ship for the goal, and why, in one sentence.
+//   cheapest:  lowest cost among rows that returned a usable answer. Ties go to
+//              the lower latency. The eval (src/eval.ts) is the check that
+//              "cheapest" is not also "wrong": DeepSeek was 10/10 at $0.0026.
+//   fastest:   lowest latency among rows costing no more than 2x the median.
+//              A 200ms answer at 10x the price is not what a customer means by
+//              "fast"; it is what they mean by "expensive".
+//   balanced:  rank-sum of cost rank and latency rank. Rank-sum rather than
+//              cost*latency so a single outlier on one axis cannot dominate.
+//   compliant: the zdr row, and only the zdr row. If it errored, say so; never
+//              fall back to a non-ZDR endpoint for a customer who asked for ZDR.
 //
-// Things worth deciding, because a customer will ask:
-//   - "cheapest": is it lowest measured cost, or lowest cost among rows within N ms of the fastest?
-//   - "fastest": raw latency, or latency after excluding rows that cost more than 2x the median?
-//   - "balanced": pick a scalarisation (cost * latency? rank-sum?) and be able to defend it.
-//   - "compliant": only the zdr row qualifies; if it errored, say so instead of falling back silently.
-//   - For cache+sticky, use call 2 (the warm call) as its representative number, not call 1.
+// cache+sticky is represented by its warm call (call 2), because the cold call
+// is a one-time cost and the warm call is what the customer pays 100 times.
 export function recommend(rows: Row[], goal: Goal): Recommendation | null {
-  const s = scored(rows);
+  const s = scored(rows).filter((r) => !(r.name === "cache+sticky" && r.call === 1) && r.name !== "free" && !Number.isNaN(r.cost));
   if (s.length === 0) return null;
-  void goal;
-  return null; // replace with your rule
+
+  if (goal === "compliant") {
+    const z = s.find((r) => r.zdr);
+    return z
+      ? { strategy: z.name, reason: `only Zero-Data-Retention endpoints; served by ${z.provider} at $${z.cost.toFixed(5)}, ${z.latencyMs}ms` }
+      : { strategy: "zdr", reason: "the zdr row did not return; no non-ZDR fallback is acceptable for this goal, fix the provider pool first" };
+  }
+
+  const byCost = [...s].sort((a, b) => a.cost - b.cost || a.latencyMs - b.latencyMs);
+  if (goal === "cheapest") {
+    const w = byCost[0]!;
+    return { strategy: w.name, reason: `$${w.cost.toFixed(5)} on ${w.provider} (${w.model}), ${w.latencyMs}ms; cached ${w.cached} tokens` };
+  }
+
+  const median = byCost[Math.floor(byCost.length / 2)]!.cost;
+  if (goal === "fastest") {
+    const eligible = s.filter((r) => r.cost <= 2 * median).sort((a, b) => a.latencyMs - b.latencyMs);
+    const w = eligible[0] ?? byCost[0]!;
+    return { strategy: w.name, reason: `${w.latencyMs}ms on ${w.provider} at $${w.cost.toFixed(5)} (within 2x the median cost of $${median.toFixed(5)})` };
+  }
+
+  // balanced
+  const byLat = [...s].sort((a, b) => a.latencyMs - b.latencyMs);
+  const score = new Map<string, number>();
+  s.forEach((r) => score.set(r.name, byCost.findIndex((x) => x.name === r.name) + byLat.findIndex((x) => x.name === r.name)));
+  const w = [...s].sort((a, b) => score.get(a.name)! - score.get(b.name)!)[0]!;
+  return { strategy: w.name, reason: `best cost+latency rank-sum: $${w.cost.toFixed(5)}, ${w.latencyMs}ms on ${w.provider}` };
 }

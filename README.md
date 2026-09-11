@@ -43,7 +43,7 @@ Node 22.6+ (runs `.ts` directly, no build step). One dev dependency for `tsc --n
 npm install
 npm run lab                      # every strategy
 npm run lab -- default zdr       # a subset by name
-npm run lab -- --goal cheapest   # plus a recommendation (rule lives in src/recommend.ts)
+npm run lab -- --goal all        # plus a recommendation per goal (rules in src/recommend.ts)
 ```
 
 Every run writes `results/<timestamp>.json` with response ids, so any number in the table can be traced back.
@@ -61,6 +61,19 @@ Every run writes `results/<timestamp>.json` with response ids, so any number in 
 | `auto:*` | `openrouter/auto` + `plugins[{id:"auto-router", cost_tier}]` | Long-tail tasks where nobody wants to maintain a model matrix. |
 | `cache+sticky` | `cache_control`, constant `user` | Long fixed prefix, many turns. The second call is the point. |
 | `free` | `:free` suffix + `models` | Smoke tests and CI at $0. Rate-limited; some endpoints train on prompts. |
+
+## Recommendations
+
+`--goal all` turns the table into a pick per goal. The rules are in `src/recommend.ts` and are short on purpose:
+
+```
+recommend for cheapest  → order+fallbacks  $0.00015 on DeepInfra (deepseek/deepseek-chat-v3.1), 250ms; cached 570 tokens
+recommend for fastest   → sort:price       195ms on DeepInfra at $0.00022 (within 2x the median cost of $0.00026)
+recommend for balanced  → order+fallbacks  best cost+latency rank-sum: $0.00015, 250ms on DeepInfra
+recommend for compliant → zdr              only Zero-Data-Retention endpoints; served by DeepInfra at $0.00015, 205ms
+```
+
+`fastest` refuses rows over 2x the median cost, so a 200ms answer at 10x the price does not win. `compliant` never falls back to a non-ZDR row. `cache+sticky` is judged on its warm call. Ties are broken at full precision, which is why two rows can print the same cost and only one wins.
 
 ## Media through the same key
 

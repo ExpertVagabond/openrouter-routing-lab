@@ -7,6 +7,7 @@
 //   npm run lab                     # all strategies
 //   npm run lab -- default zdr      # a subset, by name
 //   npm run lab -- --goal cheapest  # also print a recommendation (see recommend.ts)
+//   npm run lab -- --goal all       # all four goals
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { strategies, runStrategy, type Row } from "./strategies.ts";
@@ -101,6 +102,10 @@ for (const p of parsed) if (p.ok) sev.set(`${p.severity}/${p.category}`, (sev.ge
 console.log(`severity/category votes: ${[...sev.entries()].map(([k, v]) => `${k}×${v}`).join(", ")}`);
 
 if (goal) {
-  const rec = recommend(rows, goal);
-  console.log(rec ? `\nrecommend for "${goal}": ${rec.strategy} — ${rec.reason}` : `\nrecommend for "${goal}": no rule implemented yet (see src/recommend.ts)`);
+  const goals: Goal[] = goal === ("all" as Goal) ? ["cheapest", "fastest", "balanced", "compliant"] : [goal];
+  console.log("");
+  for (const g of goals) {
+    const rec = recommend(rows, g);
+    console.log(rec ? `recommend for ${g.padEnd(9)} → ${rec.strategy.padEnd(16)} ${rec.reason}` : `recommend for ${g}: no usable rows`);
+  }
 }
