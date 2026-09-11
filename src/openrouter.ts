@@ -42,6 +42,7 @@ export type ChatResult = {
   model: string; // the model that actually ran (matters for openrouter/auto and `models` fallbacks)
   provider: string; // the endpoint that actually served
   text: string;
+  finishReason: string; // "length" means max_tokens cut the answer (reasoning models burn it first)
   usage: Usage;
   latencyMs: number;
   raw: unknown;
@@ -85,6 +86,7 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
     model: data.model,
     provider: data.provider ?? "?",
     text: data.choices?.[0]?.message?.content ?? "",
+    finishReason: data.choices?.[0]?.finish_reason ?? "?",
     usage: data.usage,
     latencyMs,
     raw: data,

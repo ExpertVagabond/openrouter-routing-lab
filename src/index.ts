@@ -29,7 +29,7 @@ const pad = (s: string, w: number) => s.length >= w ? s.slice(0, w) : s + " ".re
 const rows: Row[] = [];
 console.log(`\nworkload: support-triage ticket, ${selected.length} strategies\n`);
 console.log(
-  [pad("strategy", 16), pad("call", 4), pad("provider", 14), pad("model", 34), pad("ms", 6), pad("in", 5), pad("out", 4), pad("cached", 6), "cost"].join("  "),
+  [pad("strategy", 16), pad("call", 4), pad("provider", 14), pad("model", 34), pad("ms", 6), pad("in", 5), pad("out", 4), pad("cached", 6), pad("cost", 9), "finish"].join("  "),
 );
 
 for (const s of selected) {
@@ -48,7 +48,8 @@ for (const s of selected) {
           pad(String(u.prompt_tokens), 5),
           pad(String(u.completion_tokens), 4),
           pad(String(u.prompt_tokens_details?.cached_tokens ?? 0), 6),
-          money(u.cost),
+          pad(money(u.cost), 9),
+          r.result.finishReason,
         ].join("  "),
       );
     } else {
@@ -72,6 +73,7 @@ writeFileSync(
       id: r.result?.id,
       provider: r.result?.provider,
       model: r.result?.model,
+      finishReason: r.result?.finishReason,
       latencyMs: r.result?.latencyMs,
       usage: r.result?.usage,
       text: r.result?.text,
@@ -85,7 +87,8 @@ console.log(`\nraw responses: ${file}`);
 // Sanity check that the triage output is actually usable, not just cheap.
 const parsed = rows.filter((r) => r.result).map((r) => {
   try {
-    const j = JSON.parse(r.result!.text);
+    // Models fence JSON even when told not to; a customer either strips or sets response_format.
+    const j = JSON.parse(r.result!.text.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, ""));
     return { name: r.strategy.name, call: r.call, ok: typeof j.category === "string" && typeof j.severity === "string", severity: j.severity, category: j.category };
   } catch {
     return { name: r.strategy.name, call: r.call, ok: false };

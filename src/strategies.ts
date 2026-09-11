@@ -6,9 +6,13 @@
 // caching and sticky routing pay off, which is why it is the one to demo.
 
 import { chat, endpoints, type ChatRequest, type ChatResult } from "./openrouter.ts";
+import { RUNBOOK } from "./runbook.ts";
 
 export const WORKHORSE = "deepseek/deepseek-chat-v3.1"; // many providers -> routing is visible
-export const CACHE_MODEL = "anthropic/claude-haiku-4.5"; // explicit cache_control, 0.1x cache reads
+// Anthropic minimum cacheable prefix: 1,024 tokens on Sonnet 4.6, 4,096 on Haiku 4.5 and Opus 4.x.
+// Haiku was the first choice here and silently cached nothing at 2,578 tokens.
+export const CACHE_MODEL = "anthropic/claude-sonnet-4.6"; // explicit cache_control, 0.1x cache reads
+export const FALLBACK_PRIMARY = "anthropic/claude-haiku-4.5";
 
 export const SYSTEM_PROMPT = `You are the first-line support triage agent for Northwind Cloud, a managed Postgres provider.
 Classify each incoming ticket and produce a JSON object with exactly these keys:
@@ -55,7 +59,8 @@ const base = (model: string, extra: Partial<ChatRequest> = {}): ChatRequest => (
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: TICKET },
   ],
-  max_tokens: 300,
+  // Reasoning models spend max_tokens on thinking first; 300 truncated gemini-3.8-flash at 289 reasoning tokens.
+  max_tokens: 1200,
   temperature: 0,
   user: "lab-user-1", // constant end-user id so sticky routing can pin the endpoint
   ...extra,
@@ -112,7 +117,7 @@ export const strategies: Strategy[] = [
     name: "model-fallbacks",
     lever: "models = [...]",
     why: "Fail across models, not just providers. First model that returns wins; the response `model` field shows which.",
-    build: async () => base(CACHE_MODEL, { models: [CACHE_MODEL, "google/gemini-2.5-flash", WORKHORSE] }),
+    build: async () => base(FALLBACK_PRIMARY, { models: [FALLBACK_PRIMARY, "google/gemini-2.5-flash", WORKHORSE] }),
   },
   {
     name: "auto:low",
@@ -129,14 +134,14 @@ export const strategies: Strategy[] = [
   {
     name: "cache+sticky",
     lever: "cache_control on the system prompt, constant `user`",
-    why: "Second call should show cached_tokens > 0 and lower cost. This is the 'cheapest token is a cached one' conversation.",
+    why: "Call 1 writes the cache (cache_write_tokens > 0), call 2 reads it (cached_tokens > 0, cost down). Prefix must clear Anthropic's minimum (1,024 on Sonnet 4.6; 4,096 on Haiku 4.5), hence the runbook.",
     calls: 2,
     build: async () => ({
       ...base(CACHE_MODEL),
       messages: [
         {
           role: "system",
-          content: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+          content: [{ type: "text", text: SYSTEM_PROMPT + "\n" + RUNBOOK, cache_control: { type: "ephemeral" } }],
         },
         { role: "user", content: TICKET },
       ],
