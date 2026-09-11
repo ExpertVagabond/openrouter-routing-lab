@@ -1,0 +1,16 @@
+{
+  "name": "openrouter-routing-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Run one prompt through every OpenRouter routing strategy and compare provider, latency, cost and cache hits.",
+  "engines": { "node": ">=22.6" },
+  "scripts": {
+    "lab": "node --env-file-if-exists=$HOME/.config/openrouter/openrouter.env src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^6.0.0"
+  }
+}
