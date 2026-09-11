@@ -31,6 +31,7 @@ These came out of the first three runs and are the findings a customer would hav
 3. **Reasoning models spend `max_tokens` on thinking first.** `auto:low` picked `gemini-3.8-flash`, which used 289 reasoning tokens of a 300 budget and returned a fragment with `finish_reason: length`. Headroom fixed it; the `finish` column now makes it visible.
 4. **Models fence JSON even when told not to.** Claude wrapped the object in a code fence despite rule 5. Strip fences or use `response_format`; do not count it as a model failure.
 5. **Temperature 0 is not determinism.** DeepSeek V3.1 on the same DeepInfra fp4 endpoint returned P0 on two rows and P1 on four for an identical request. Sonnet with the runbook returned P0 both times because runbook §1.1 removes the ambiguity. Fix the prompt before blaming the model, and do not sell a customer "temperature 0" as reproducibility.
+7. **`models` fallback covers request failures, not bad completions.** `nvidia/nemotron-3.5-lightning:free` returned HTTP 200 with `finish_reason: error`, empty content, and 816 reasoning tokens; no fallback fired. When `thinkingmachines/inkling:free` failed at the request level, the list fell through to `poolside/laguna-s-2.1:free` for $0. If a customer needs "retry on garbage", that is client-side logic on `finish_reason`, not `models`.
 6. **`auto:low` was the slowest and among the most expensive rows here.** Community spend share picked a reasoning model for a short classification task. The Auto Router is for the long tail, not for a workload you have already characterised.
 
 ## Run
@@ -59,6 +60,7 @@ Every run writes `results/<timestamp>.json` with response ids, so any number in 
 | `model-fallbacks` | `models` | Survive a model-level outage, not only a provider one. |
 | `auto:*` | `openrouter/auto` + `plugins[{id:"auto-router", cost_tier}]` | Long-tail tasks where nobody wants to maintain a model matrix. |
 | `cache+sticky` | `cache_control`, constant `user` | Long fixed prefix, many turns. The second call is the point. |
+| `free` | `:free` suffix + `models` | Smoke tests and CI at $0. Rate-limited; some endpoints train on prompts. |
 
 ## Files
 

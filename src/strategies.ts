@@ -132,6 +132,12 @@ export const strategies: Strategy[] = [
     build: async () => base("openrouter/auto", { plugins: [{ id: "auto-router", cost_tier: "high" }] }),
   },
   {
+    name: "free",
+    lever: "`:free` model suffix + models fallback",
+    why: "Smoke tests and CI. $0, rate-limited, and some free endpoints train on prompts, so never real customer data. The `models` list survives one free endpoint being saturated.",
+    build: async () => base("thinkingmachines/inkling:free", { models: ["thinkingmachines/inkling:free", "poolside/laguna-s-2.1:free", "nvidia/nemotron-3.5-lightning:free"] }),
+  },
+  {
     name: "cache+sticky",
     lever: "cache_control on the system prompt, constant `user`",
     why: "Call 1 writes the cache (cache_write_tokens > 0), call 2 reads it (cached_tokens > 0, cost down). Prefix must clear Anthropic's minimum (1,024 on Sonnet 4.6; 4,096 on Haiku 4.5), hence the runbook.",
