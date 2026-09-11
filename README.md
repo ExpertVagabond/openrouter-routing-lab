@@ -99,6 +99,21 @@ wallet verdicts if the agent had complied:
 
 Real: the inference calls, their `usage.cost`, the tier degradation, the 429, and the policy verdicts (the evaluator is a pure function, so these are exactly what the wallet produces). Simulated: the USDC transfers themselves; nothing is signed or broadcast. The model refused the injected ticket on its own in most runs (P1/security, no payment), but not deterministically, which is the argument for the wallet layer.
 
+## A held-out eval
+
+`src/eval.ts` scores ten labeled tickets that do not appear in the prompt, exact match on severity and category, and reports cost per correct answer. Run 2026-09-11, $0.029 total:
+
+```
+model                         sev      cat      both     cost     $/correct  ms/avg
+deepseek/deepseek-chat-v3.1   10/10    10/10    10/10    $0.0026  $0.00026   1462
+openai/gpt-5-mini             10/10    9/10     9/10     $0.0126  $0.00139   423
+google/gemini-2.5-flash       10/10    9/10     9/10     $0.0035  $0.00039   604
+anthropic/claude-haiku-4.5    10/10    9/10     9/10     $0.0104  $0.00116   804
+poolside/laguna-s-2.1:free    2/10     2/10     2/10     $0.0000  -          243
+```
+
+For this workload the cheapest model is also the most accurate, and the free model is not usable. That is the answer to "which model should we ship" for a characterised task, and it took ten labels and three cents. gpt-5-mini is the pick only if the 1.4s → 0.4s latency is worth 5× the cost per correct answer.
+
 ## Files
 
 - `src/openrouter.ts` — fetch-only client; the fields an FDE points at (`provider`, `model`, `usage.cost`, `usage.prompt_tokens_details.cached_tokens`), plus `/endpoints` for live per-provider pricing and uptime.
@@ -106,6 +121,7 @@ Real: the inference calls, their `usage.cost`, the tier degradation, the 429, an
 - `src/runbook.ts` — the long system-prompt appendix that gets the cache row over Anthropic's minimum prefix.
 - `src/media.ts` — image generation (`POST /images`) and transcription (`input_audio`) through the same key.
 - `src/agent.ts` — budget-aware tiering + coldstar-agent-signer policy gate on every payment.
+- `src/eval.ts` — held-out labeled eval, exact-match scoring, cost per correct answer.
 - `src/recommend.ts` — turns rows into "ship this one" for a goal (`cheapest | fastest | balanced | compliant`).
 - `src/index.ts` — runner, table, results dump, output-validity check.
 
