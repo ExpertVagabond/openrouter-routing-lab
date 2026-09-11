@@ -62,11 +62,25 @@ Every run writes `results/<timestamp>.json` with response ids, so any number in 
 | `cache+sticky` | `cache_control`, constant `user` | Long fixed prefix, many turns. The second call is the point. |
 | `free` | `:free` suffix + `models` | Smoke tests and CI at $0. Rate-limited; some endpoints train on prompts. |
 
+## Media through the same key
+
+`src/media.ts` does one image out and one audio in, both with `usage.cost` on the response:
+
+```sh
+node --env-file=$HOME/.config/openrouter/openrouter.env src/media.ts image "a purple squirrel at a support desk, flat vector"
+node --env-file=$HOME/.config/openrouter/openrouter.env src/media.ts transcribe clip.wav
+```
+
+Measured 2026-09-11: one 1024² image on `google/gemini-2.5-flash-image` = **$0.0387**, 5.7s. An 8.5s clip on `google/gemini-2.5-flash-lite` = 225 audio tokens = **$0.0000778** (about 3¢ per hour of audio). Image generation is `POST /images`, not chat completions; transcription is a chat completion with an `input_audio` part.
+
+<img src="docs/sample-image.png" width="256" alt="sample image output">
+
 ## Files
 
 - `src/openrouter.ts` — fetch-only client; the fields an FDE points at (`provider`, `model`, `usage.cost`, `usage.prompt_tokens_details.cached_tokens`), plus `/endpoints` for live per-provider pricing and uptime.
 - `src/strategies.ts` — the workload and the strategy list. Add a row by adding an object.
 - `src/runbook.ts` — the long system-prompt appendix that gets the cache row over Anthropic's minimum prefix.
+- `src/media.ts` — image generation (`POST /images`) and transcription (`input_audio`) through the same key.
 - `src/recommend.ts` — turns rows into "ship this one" for a goal (`cheapest | fastest | balanced | compliant`).
 - `src/index.ts` — runner, table, results dump, output-validity check.
 
