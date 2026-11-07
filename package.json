@@ -9,7 +9,8 @@
   },
   "scripts": {
     "lab": "node --env-file-if-exists=$HOME/.config/openrouter/openrouter.env src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
